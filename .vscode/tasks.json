@@ -1,0 +1,12 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run Katana",
+      "type": "shell",
+      "command": "go run main.go",
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}

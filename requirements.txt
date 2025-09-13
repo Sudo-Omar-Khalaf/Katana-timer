@@ -1,0 +1,18 @@
+# Katana Time Tracker Requirements
+# List of system and Go dependencies for smooth installation on Linux
+
+# System packages (for apt)
+build-essential
+pkg-config
+libgl1-mesa-dev
+git
+golang
+
+# Python (if needed for export or analytics)
+python3-pip
+
+# Go modules (will be handled by go mod tidy, but listed for clarity)
+# No need to install manually, but included for completeness
+# fyne.io/fyne/v2
+# github.com/gen2brain/beeep
+# github.com/mattn/go-sqlite3

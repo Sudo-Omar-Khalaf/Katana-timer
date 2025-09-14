@@ -1,5 +1,7 @@
 # Katana Time Tracker
 
+![Katana Time Tracker Screenshot](image.png)
+
 Katana is a lightweight, visually appealing, and flexible time tracking desktop application built in Go using the Fyne GUI toolkit. It is designed for minimal resource usage, a classic but modern UI, and robust time tracking features for daily, weekly, and monthly productivity.
 
 ## Features

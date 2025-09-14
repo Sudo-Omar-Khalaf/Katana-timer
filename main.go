@@ -4,6 +4,7 @@ import (
 	"katana/ui"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"log"
 )
 
 func main() {
@@ -16,7 +17,10 @@ func main() {
 	// Do not call SetFixedSize or SetMinSize, allow full dynamic resizing
 
 	// Create and set the main UI
-	mainUI := ui.NewMainUI()
+	mainUI, err := ui.NewMainUI()
+	if err != nil {
+		log.Fatalf("failed to initialize UI: %v", err)
+	}
 	w.SetContent(mainUI.Container)
 
 	// Show and run

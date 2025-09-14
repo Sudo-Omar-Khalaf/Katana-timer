@@ -1,0 +1,4 @@
+# Katana Time Tracker .gitignore
+# Ignore export files
+katana_export.csv
+katana_export.pdf

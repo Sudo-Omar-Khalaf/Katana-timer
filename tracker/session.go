@@ -1,6 +1,7 @@
 package tracker
 
 import (
+	"fmt"
 	"strings"
 	"time"
 )
@@ -52,4 +53,33 @@ func NewSession(activity string) *Session {
 func (s *Session) Stop() {
 	s.EndTime = time.Now()
 	s.Duration = s.EndTime.Sub(s.StartTime)
+}
+
+// Validate checks if the session data is valid
+func (s *Session) Validate() error {
+	if s.Activity == "" {
+		return fmt.Errorf("activity cannot be empty")
+	}
+	if s.StartTime.IsZero() {
+		return fmt.Errorf("start time cannot be zero")
+	}
+	if !s.EndTime.IsZero() && s.EndTime.Before(s.StartTime) {
+		return fmt.Errorf("end time cannot be before start time")
+	}
+	return nil
+}
+
+// GetFormattedDuration returns a human-readable duration string
+func (s *Session) GetFormattedDuration() string {
+	if s.Duration == 0 {
+		return "0m"
+	}
+	
+	hours := int(s.Duration.Hours())
+	minutes := int(s.Duration.Minutes()) % 60
+	
+	if hours > 0 {
+		return fmt.Sprintf("%dh %dm", hours, minutes)
+	}
+	return fmt.Sprintf("%dm", minutes)
 }

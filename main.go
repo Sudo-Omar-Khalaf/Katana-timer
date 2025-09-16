@@ -5,6 +5,9 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 func main() {
@@ -22,6 +25,21 @@ func main() {
 		log.Fatalf("failed to initialize UI: %v", err)
 	}
 	w.SetContent(mainUI.Container)
+
+	// Handle graceful shutdown
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		mainUI.Cleanup()
+		a.Quit()
+	}()
+
+	// Also cleanup when window is closed
+	w.SetCloseIntercept(func() {
+		mainUI.Cleanup()
+		a.Quit()
+	})
 
 	// Show and run
 	w.ShowAndRun()

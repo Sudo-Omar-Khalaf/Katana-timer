@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"time"
 	"encoding/json"
-	"io/ioutil"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -60,7 +59,7 @@ func (s *Storage) SaveSession(sess *tracker.Session) error {
 	}
 	// Fallback: append to JSON file
 	var sessions []*tracker.Session
-	b, err := ioutil.ReadFile(s.jsonPath)
+	b, err := os.ReadFile(s.jsonPath)
 	if err == nil {
 		json.Unmarshal(b, &sessions)
 	}
@@ -69,7 +68,7 @@ func (s *Storage) SaveSession(sess *tracker.Session) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(s.jsonPath, data, 0644)
+	return os.WriteFile(s.jsonPath, data, 0644)
 }
 
 // LoadSessionsForDay loads all sessions for a given day (used for daily/weekly/monthly viewers)
@@ -99,7 +98,7 @@ func (s *Storage) LoadSessionsForDay(day time.Time) ([]*tracker.Session, error) 
 		return sessions, nil
 	}
 	// Fallback: load from JSON file
-	b, err := ioutil.ReadFile(s.jsonPath)
+	b, err := os.ReadFile(s.jsonPath)
 	if err != nil {
 		return nil, nil
 	}
@@ -111,6 +110,88 @@ func (s *Storage) LoadSessionsForDay(day time.Time) ([]*tracker.Session, error) 
 		}
 	}
 	return filtered, nil
+}
+
+// LoadSessionsForMonth loads all sessions for a given month
+func (s *Storage) LoadSessionsForMonth(year int, month time.Month) ([]*tracker.Session, error) {
+	var sessions []*tracker.Session
+	if s.useSQLite {
+		start := time.Date(year, month, 1, 0, 0, 0, 0, time.Local)
+		end := start.AddDate(0, 1, 0) // First day of next month
+		rows, err := s.db.Query(`SELECT id, start_time, end_time, duration, activity, category, tags FROM sessions WHERE start_time >= ? AND start_time < ? ORDER BY start_time ASC`, start.Format(time.RFC3339), end.Format(time.RFC3339))
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var sess tracker.Session
+			var startStr, endStr, tagsStr string
+			var duration int64
+			if err := rows.Scan(&sess.ID, &startStr, &endStr, &duration, &sess.Activity, &sess.Category, &tagsStr); err != nil {
+				continue
+			}
+			sess.StartTime, _ = time.Parse(time.RFC3339, startStr)
+			sess.EndTime, _ = time.Parse(time.RFC3339, endStr)
+			sess.Duration = time.Duration(duration) * time.Millisecond
+			json.Unmarshal([]byte(tagsStr), &sess.Tags)
+			sessions = append(sessions, &sess)
+		}
+		return sessions, nil
+	}
+	// Fallback: load from JSON file
+	b, err := os.ReadFile(s.jsonPath)
+	if err != nil {
+		return sessions, nil // Return empty slice instead of nil
+	}
+	json.Unmarshal(b, &sessions)
+	var filtered []*tracker.Session
+	for _, sess := range sessions {
+		if sess.StartTime.Year() == year && sess.StartTime.Month() == month {
+			filtered = append(filtered, sess)
+		}
+	}
+	return filtered, nil
+}
+
+// Close properly closes database connections
+func (s *Storage) Close() error {
+	if s.useSQLite && s.db != nil {
+		return s.db.Close()
+	}
+	return nil
+}
+
+// GetAllSessions returns all stored sessions
+func (s *Storage) GetAllSessions() ([]*tracker.Session, error) {
+	var sessions []*tracker.Session
+	if s.useSQLite {
+		rows, err := s.db.Query(`SELECT id, start_time, end_time, duration, activity, category, tags FROM sessions ORDER BY start_time DESC`)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var sess tracker.Session
+			var startStr, endStr, tagsStr string
+			var duration int64
+			if err := rows.Scan(&sess.ID, &startStr, &endStr, &duration, &sess.Activity, &sess.Category, &tagsStr); err != nil {
+				continue
+			}
+			sess.StartTime, _ = time.Parse(time.RFC3339, startStr)
+			sess.EndTime, _ = time.Parse(time.RFC3339, endStr)
+			sess.Duration = time.Duration(duration) * time.Millisecond
+			json.Unmarshal([]byte(tagsStr), &sess.Tags)
+			sessions = append(sessions, &sess)
+		}
+		return sessions, nil
+	}
+	// Fallback: load from JSON file
+	b, err := os.ReadFile(s.jsonPath)
+	if err != nil {
+		return sessions, nil // Return empty slice instead of nil
+	}
+	json.Unmarshal(b, &sessions)
+	return sessions, nil
 }
 
 func sameDay(t1, t2 time.Time) bool {

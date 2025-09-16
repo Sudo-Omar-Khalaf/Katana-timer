@@ -1,1 +1,49 @@
+# Katana Time Tracker .gitignore
 
+# Export files
+katana_export.csv
+katana_export.pdf
+
+# Binary
+katana
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go test files
+*.test
+
+# Go coverage files
+*.out
+
+# Dependency directories
+vendor/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Data directory (optional - uncomment if you don't want to track session data)
+# data/
+# Personal project tracking files (not for public repo)
+PROJECT_STATUS.md
+GITHUB_PUSH_GUIDE.md
+BUGFIXES.md
+DEVELOPMENT.md
+image.png

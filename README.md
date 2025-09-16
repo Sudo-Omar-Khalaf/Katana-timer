@@ -111,7 +111,7 @@ Katana can wake your computer from sleep/suspend mode when alarms are scheduled:
 - **Ubuntu/Debian**: Native systemd integration
 - **Arch Linux**: Hardware RTC wake support
 
-**Setup Wake-Up (Optional):**
+**Setup Wake-Up (Optional, but highly recommended):**
 ```bash
 # Grant sudo permissions for wake functionality (one-time setup)
 echo "$USER ALL=(ALL) NOPASSWD: /usr/sbin/rtcwake" | sudo tee /etc/sudoers.d/katana-wake

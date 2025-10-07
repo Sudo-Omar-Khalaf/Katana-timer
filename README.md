@@ -2,7 +2,8 @@
 
 > **Advanced Alarm Clock with System Wake-Up | Stopwatch | Countdown Timer | Time Tracker**
 
-[![Go](https://img.shields.io/badge/Go-1.19+-00ADD8?style=flat&logo=go)](https://golang.org/)
+[![Go](https://img.shields.io/badge/Go-1.23+-00ADD8?style=flat&logo=go)](https://golang.org/)
+[![Build](https://github.com/Sudo-Omar-Khalaf/Katana-timer/actions/workflows/build.yml/badge.svg)](https://github.com/Sudo-Omar-Khalaf/Katana-timer/actions)
 [![Linux](https://img.shields.io/badge/Linux-Compatible-FCC624?style=flat&logo=linux&logoColor=black)](https://www.linux.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Wake Support](https://img.shields.io/badge/Wake-From--Sleep-success?style=flat)](https://github.com/Sudo-Omar-Khalaf/katana)
@@ -368,8 +369,12 @@ go mod tidy
 go clean -cache -modcache
 go build -o katana
 
-# Verify Go version (needs 1.19+)
+# Verify Go version (needs 1.19+, recommended 1.23+)
 go version
+
+# If you see "invalid go version" error in go.mod:
+# The go.mod file should use format "go 1.23" not "go 1.23.5"
+# Fix with: sed -i 's/go 1\.[0-9]*\.[0-9]*/go 1.23/' go.mod
 ```
 
 #### Binary Not Found After Install

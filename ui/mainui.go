@@ -1,28 +1,29 @@
 package ui
 
 import (
+	"fmt"
+	"io"
+	"katana/export"
+	"katana/power"
+	"katana/sound"
 	"katana/storage"
 	"katana/tracker"
-	"katana/export"
-	"katana/sound"
-	"katana/power"
 	"log"
-	"sync"
-	"time"
-	"fmt"
-	"strings"
-	"io"
 	"os"
 	"strconv"
+	"strings"
+	"sync"
+	"time"
 
-	"github.com/gen2brain/beeep"
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/widget"
-	"fyne.io/fyne/v2/canvas"
-	"fyne.io/fyne/v2/theme"
-	"fyne.io/fyne/v2/dialog"
 	"image/color"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
+	"github.com/gen2brain/beeep"
 )
 
 func init() {
@@ -31,28 +32,28 @@ func init() {
 }
 
 type MainUI struct {
-	Container      fyne.CanvasObject
+	Container fyne.CanvasObject
 	// Time Tracker tab components
-	activityEntry  *widget.Entry
-	tagEntry       *widget.Entry // New: for entering tags
-	startStopBtn   *TerminalButton
-	isTracking     bool
-	currentSession *tracker.Session
-	storage        *storage.Storage
-	soundPlayer    *sound.Player // Sound player for alarm sounds
-	powerManager   *power.PowerManager // Power manager for sleep prevention
-	mu             sync.Mutex
-	timerLabel     *widget.Label
-	activityList   *widget.List
-	sessionsToday  []*tracker.Session
-	allSessionsToday []*tracker.Session
+	activityEntry                 *widget.Entry
+	tagEntry                      *widget.Entry // New: for entering tags
+	startStopBtn                  *TerminalButton
+	isTracking                    bool
+	currentSession                *tracker.Session
+	storage                       *storage.Storage
+	soundPlayer                   *sound.Player       // Sound player for alarm sounds
+	powerManager                  *power.PowerManager // Power manager for sleep prevention
+	mu                            sync.Mutex
+	timerLabel                    *widget.Label
+	activityList                  *widget.List
+	sessionsToday                 []*tracker.Session
+	allSessionsToday              []*tracker.Session
 	updateActivityListPlaceholder func()
-	originalTabLabels []string
-	viewerContents []fyne.CanvasObject
-	contentContainer *fyne.Container
-	tabBar *TerminalTabBar
-	notificationSent bool // Track if 2-hour notification has been sent
-	
+	originalTabLabels             []string
+	viewerContents                []fyne.CanvasObject
+	contentContainer              *fyne.Container
+	tabBar                        *TerminalTabBar
+	notificationSent              bool // Track if 2-hour notification has been sent
+
 	// Main application tabs
 	mainTabContainer *CustomMainTabContainer
 	timeTrackerTab   *container.TabItem
@@ -112,11 +113,11 @@ func (b *TerminalButton) CreateRenderer() fyne.WidgetRenderer {
 }
 
 type terminalButtonRenderer struct {
-	btn    *TerminalButton
-	bg     *canvas.Rectangle
-	border *canvas.Rectangle
-	label  *canvas.Text
-	shadow *canvas.Rectangle
+	btn     *TerminalButton
+	bg      *canvas.Rectangle
+	border  *canvas.Rectangle
+	label   *canvas.Text
+	shadow  *canvas.Rectangle
 	objects []fyne.CanvasObject
 }
 
@@ -147,7 +148,7 @@ func (r *terminalButtonRenderer) Refresh() {
 	} else {
 		r.bg.FillColor = color.RGBA{0, 0, 0, 128}
 	}
-	
+
 	// Update label text from button's Label field
 	if r.btn.isTimer {
 		if r.btn.isStop {
@@ -159,7 +160,7 @@ func (r *terminalButtonRenderer) Refresh() {
 		// For regular buttons, use the Label field
 		r.label.Text = r.btn.Label
 	}
-	
+
 	canvas.Refresh(r.bg)
 	canvas.Refresh(r.label)
 	canvas.Refresh(r.border)
@@ -168,7 +169,7 @@ func (r *terminalButtonRenderer) Refresh() {
 
 func (r *terminalButtonRenderer) BackgroundColor() color.Color { return color.Transparent }
 func (r *terminalButtonRenderer) Objects() []fyne.CanvasObject { return r.objects }
-func (r *terminalButtonRenderer) Destroy() {}
+func (r *terminalButtonRenderer) Destroy()                     {}
 
 func (b *TerminalButton) MouseIn(*fyne.PointEvent) {
 	b.hovered = true
@@ -269,7 +270,7 @@ func (r *terminalTabButtonRenderer) Refresh() {
 
 func (r *terminalTabButtonRenderer) BackgroundColor() color.Color { return color.Transparent }
 func (r *terminalTabButtonRenderer) Objects() []fyne.CanvasObject { return r.objects }
-func (r *terminalTabButtonRenderer) Destroy() {}
+func (r *terminalTabButtonRenderer) Destroy()                     {}
 
 func (b *TerminalTabButton) MouseIn(*fyne.PointEvent) {
 	b.hovered = true
@@ -346,7 +347,7 @@ func (r *terminalTabBarRenderer) Refresh() {
 }
 func (r *terminalTabBarRenderer) BackgroundColor() color.Color { return color.Transparent }
 func (r *terminalTabBarRenderer) Objects() []fyne.CanvasObject { return r.objects }
-func (r *terminalTabBarRenderer) Destroy() {}
+func (r *terminalTabBarRenderer) Destroy()                     {}
 
 // --- TerminalEntry: custom entry widget for pure black background and green text/placeholder ---
 type TerminalEntryWidget struct {
@@ -396,31 +397,31 @@ func NewMainUI() (*MainUI, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Initialize sound player
 	soundPlayer, err := sound.NewPlayer()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize sound player: %w", err)
 	}
-	
+
 	// Load alarm sounds from assets directory
 	err = soundPlayer.LoadSoundsFromDirectory("assets/sounds")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load alarm sounds: %w", err)
 	}
-	
+
 	// Initialize power manager
 	powerManager := power.NewPowerManager()
-	
+
 	sessionsToday, _ := st.LoadSessionsForDay(time.Now())
 	ui := &MainUI{
-		isTracking:       false,
-		storage:          st,
-		soundPlayer:      soundPlayer,
-		powerManager:     powerManager,
-		timerLabel:       widget.NewLabel("00:00:00"),
-		sessionsToday:    sessionsToday,
-		allSessionsToday: sessionsToday, // Store unfiltered sessions
+		isTracking:        false,
+		storage:           st,
+		soundPlayer:       soundPlayer,
+		powerManager:      powerManager,
+		timerLabel:        widget.NewLabel("00:00:00"),
+		sessionsToday:     sessionsToday,
+		allSessionsToday:  sessionsToday, // Store unfiltered sessions
 		originalTabLabels: []string{"Daily", "Weekly", "Monthly"},
 	}
 
@@ -578,7 +579,7 @@ func makeMonthGrid(storage *storage.Storage, terminalGreen color.Color) fyne.Can
 func (ui *MainUI) toggleTracking() {
 	ui.mu.Lock()
 	defer ui.mu.Unlock()
-	if (!ui.isTracking) {
+	if !ui.isTracking {
 		activity := ui.activityEntry.Text
 		tagsText := ui.tagEntry.Text
 		if activity == "" {
@@ -721,6 +722,7 @@ func (ui *MainUI) Cleanup() {
 
 // --- Custom theme for green tabs (always green, underline when selected) ---
 type terminalTheme struct{}
+
 func (t *terminalTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Color {
 	switch n {
 	case theme.ColorNameSelection, theme.ColorNamePrimary, theme.ColorNameFocus:
@@ -745,13 +747,13 @@ func (t *terminalTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.
 		return theme.DefaultTheme().Color(n, v)
 	}
 }
-func (t *terminalTheme) Font(s fyne.TextStyle) fyne.Resource { 
+func (t *terminalTheme) Font(s fyne.TextStyle) fyne.Resource {
 	// Force monospace font for all text
 	s.Monospace = true
-	return theme.DefaultTheme().Font(s) 
+	return theme.DefaultTheme().Font(s)
 }
 func (t *terminalTheme) Icon(n fyne.ThemeIconName) fyne.Resource { return theme.DefaultTheme().Icon(n) }
-func (t *terminalTheme) Size(n fyne.ThemeSizeName) float32 { return theme.DefaultTheme().Size(n) }
+func (t *terminalTheme) Size(n fyne.ThemeSizeName) float32       { return theme.DefaultTheme().Size(n) }
 
 // Helper to strip color/underline tags for tab text
 func stripColorUnderline(s string) string {
@@ -769,7 +771,7 @@ func formatStopwatchTime(d time.Duration) string {
 	minutes := (totalMillis % (1000 * 60 * 60)) / (1000 * 60)
 	seconds := (totalMillis % (1000 * 60)) / 1000
 	millis := totalMillis % 1000
-	
+
 	return fmt.Sprintf("%02d:%02d:%02d.%03d", hours, minutes, seconds, millis)
 }
 
@@ -811,7 +813,9 @@ func (ui *MainUI) createTimeTrackerTab() *container.TabItem {
 	exportCSV := NewTerminalButton("Export CSV", func() {
 		dialog.NewFileSave(
 			func(uc fyne.URIWriteCloser, err error) {
-				if err != nil || uc == nil { return }
+				if err != nil || uc == nil {
+					return
+				}
 				sessions, _ := ui.storage.LoadSessionsForDay(time.Now())
 				export.ExportToCSV(sessions, uc.URI().Path())
 				uc.Close()
@@ -822,7 +826,9 @@ func (ui *MainUI) createTimeTrackerTab() *container.TabItem {
 	exportPDF := NewTerminalButton("Export PDF", func() {
 		dialog.NewFileSave(
 			func(uc fyne.URIWriteCloser, err error) {
-				if err != nil || uc == nil { return }
+				if err != nil || uc == nil {
+					return
+				}
 				sessions, _ := ui.storage.LoadSessionsForDay(time.Now())
 				export.ExportToPDF(sessions, uc.URI().Path())
 				uc.Close()
@@ -834,7 +840,9 @@ func (ui *MainUI) createTimeTrackerTab() *container.TabItem {
 	exportMonthlyCSV := NewTerminalButton("Export Month CSV", func() {
 		dialog.NewFileSave(
 			func(uc fyne.URIWriteCloser, err error) {
-				if err != nil || uc == nil { return }
+				if err != nil || uc == nil {
+					return
+				}
 				export.ExportMonthlyToCSV(ui.storage, uc.URI().Path())
 				uc.Close()
 			},
@@ -845,7 +853,9 @@ func (ui *MainUI) createTimeTrackerTab() *container.TabItem {
 	exportMonthlyPDF := NewTerminalButton("Export Month PDF", func() {
 		dialog.NewFileSave(
 			func(uc fyne.URIWriteCloser, err error) {
-				if err != nil || uc == nil { return }
+				if err != nil || uc == nil {
+					return
+				}
 				export.ExportMonthlyToPDF(ui.storage, uc.URI().Path())
 				uc.Close()
 			},
@@ -883,8 +893,8 @@ func (ui *MainUI) createTimeTrackerTab() *container.TabItem {
 			for _, sess := range s {
 				totalMonth += sess.Duration.Hours()
 			}
-		 }
-		 analyticsText.Text = fmt.Sprintf("Today: %.1fh | Week: %.1fh | Month: %.1fh", totalToday, totalWeek, totalMonth)
+		}
+		analyticsText.Text = fmt.Sprintf("Today: %.1fh | Week: %.1fh | Month: %.1fh", totalToday, totalWeek, totalMonth)
 		canvas.Refresh(analyticsText)
 	}
 	updateAnalytics()
@@ -896,7 +906,7 @@ func (ui *MainUI) createTimeTrackerTab() *container.TabItem {
 	ui.activityList = widget.NewList(
 		func() int { return len(ui.sessionsToday) },
 		func() fyne.CanvasObject {
-			bg := canvas.NewRectangle(color.Black) // black background for activity row
+			bg := canvas.NewRectangle(color.Black)                                  // black background for activity row
 			label := canvas.NewText("", color.RGBA{R: 180, G: 180, B: 180, A: 255}) // grey text for activity
 			label.TextStyle = fyne.TextStyle{Monospace: true}
 			return container.NewStack(bg, label)
@@ -986,7 +996,7 @@ func (ui *MainUI) createTimeTrackerTab() *container.TabItem {
 	)
 
 	mainContent := container.NewVSplit(
-		controls, // top: controls (activity entry, buttons, etc.)
+		controls,    // top: controls (activity entry, buttons, etc.)
 		centerSplit, // bottom: activity list and viewers
 	)
 	mainContent.Offset = 0.22 // Adjust as needed for initial split
@@ -1032,10 +1042,10 @@ func (ui *MainUI) createStopwatchTab() *container.TabItem {
 			if i < len(capturedTimes) {
 				capture := capturedTimes[len(capturedTimes)-1-i] // Show most recent first
 				label := o.(*canvas.Text)
-				
+
 				captureNum := len(capturedTimes) - i
 				timeStr := formatStopwatchTime(capture.Time)
-				
+
 				if capture.Difference > 0 {
 					diffStr := formatStopwatchTime(capture.Difference)
 					label.Text = fmt.Sprintf("%d. %s (+%s)", captureNum, timeStr, diffStr)
@@ -1072,7 +1082,7 @@ func (ui *MainUI) createStopwatchTab() *container.TabItem {
 
 	// Start/Stop button
 	startStopBtn := NewTerminalButton("Start", nil)
-	
+
 	startStopBtn.OnTap = func() {
 		if !stopwatchRunning {
 			// Start stopwatch
@@ -1105,18 +1115,18 @@ func (ui *MainUI) createStopwatchTab() *container.TabItem {
 		} else {
 			currentTime = stopwatchElapsed
 		}
-		
+
 		if currentTime > 0 {
 			var difference time.Duration
 			if len(capturedTimes) > 0 {
 				difference = currentTime - capturedTimes[len(capturedTimes)-1].Time
 			}
-			
+
 			capture := &CapturedTime{
 				Time:       currentTime,
 				Difference: difference,
 			}
-			
+
 			capturedTimes = append(capturedTimes, capture)
 			captureList.Refresh()
 		}
@@ -1188,7 +1198,9 @@ func (ui *MainUI) createCountdownTab() *container.TabItem {
 	hoursEntry.SetText("0")
 	hoursEntry.TextStyle = fyne.TextStyle{Monospace: true}
 	hoursEntry.Validator = func(s string) error {
-		if s == "" { return nil }
+		if s == "" {
+			return nil
+		}
 		if val, err := fmt.Sscanf(s, "%d", new(int)); err != nil || val != 1 {
 			return fmt.Errorf("invalid number")
 		}
@@ -1223,10 +1235,10 @@ func (ui *MainUI) createCountdownTab() *container.TabItem {
 				countdownRunning = false
 				countdownDisplay.Text = "00:00:00"
 				countdownDisplay.Color = color.RGBA{255, 0, 0, 255} // Red when finished
-				
+
 				// Show notification
 				beeep.Notify("Katana Timer", "Countdown finished!", "")
-				
+
 				// Flash effect
 				go func() {
 					for i := 0; i < 6; i++ {
@@ -1246,7 +1258,7 @@ func (ui *MainUI) createCountdownTab() *container.TabItem {
 				minutes := int(remaining.Minutes()) % 60
 				seconds := int(remaining.Seconds()) % 60
 				countdownDisplay.Text = fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds)
-				
+
 				// Change color based on remaining time
 				if remaining <= 10*time.Second {
 					countdownDisplay.Color = color.RGBA{255, 0, 0, 255} // Red for last 10 seconds
@@ -1264,27 +1276,27 @@ func (ui *MainUI) createCountdownTab() *container.TabItem {
 
 	// Start/Stop button
 	startStopBtn := NewTerminalButton("Start", nil)
-	
+
 	startStopBtn.OnTap = func() {
 		if !countdownRunning {
 			// Parse time input
 			hours := parseIntSafe(hoursEntry.Text)
 			minutes := parseIntSafe(minutesEntry.Text)
 			seconds := parseIntSafe(secondsEntry.Text)
-			
+
 			totalSeconds := hours*3600 + minutes*60 + seconds
 			if totalSeconds <= 0 {
 				// Show error for invalid time
 				beeep.Alert("Invalid Time", "Please set a valid countdown time", "")
 				return
 			}
-			
+
 			// Start countdown
 			countdownDuration = time.Duration(totalSeconds) * time.Second
 			countdownEndTime = time.Now().Add(countdownDuration)
 			countdownRunning = true
 			startStopBtn.SetLabel("Stop")
-			
+
 			// Disable input fields
 			hoursEntry.Disable()
 			minutesEntry.Disable()
@@ -1294,7 +1306,7 @@ func (ui *MainUI) createCountdownTab() *container.TabItem {
 			countdownRunning = false
 			startStopBtn.SetLabel("Start")
 			countdownDisplay.Color = terminalGreen
-			
+
 			// Re-enable input fields
 			hoursEntry.Enable()
 			minutesEntry.Enable()
@@ -1308,12 +1320,12 @@ func (ui *MainUI) createCountdownTab() *container.TabItem {
 		startStopBtn.SetLabel("Start")
 		countdownDisplay.Text = "00:00:00"
 		countdownDisplay.Color = terminalGreen
-		
+
 		// Re-enable input fields
 		hoursEntry.Enable()
 		minutesEntry.Enable()
 		secondsEntry.Enable()
-		
+
 		updateCountdownDisplay()
 	})
 
@@ -1333,7 +1345,7 @@ func (ui *MainUI) createCountdownTab() *container.TabItem {
 			<-ticker.C
 			if countdownRunning {
 				updateCountdownDisplay()
-				
+
 				// Update progress bar
 				elapsed := time.Since(countdownEndTime.Add(-countdownDuration))
 				progress := float64(elapsed) / float64(countdownDuration)
@@ -1373,14 +1385,14 @@ func (ui *MainUI) createCountdownTab() *container.TabItem {
 
 // Alarm represents a single alarm
 type Alarm struct {
-	ID          string
-	Name        string
-	Time        string // Format: "15:04"
-	Enabled     bool
-	Recurring   bool
-	DaysOfWeek  []bool // [Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday]
+	ID            string
+	Name          string
+	Time          string // Format: "15:04"
+	Enabled       bool
+	Recurring     bool
+	DaysOfWeek    []bool // [Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday]
 	LastTriggered time.Time
-	SoundName   string // Selected sound name
+	SoundName     string // Selected sound name
 }
 
 // createAlarmTab creates the alarm functionality tab
@@ -1405,7 +1417,7 @@ func (ui *MainUI) createAlarmTab() *container.TabItem {
 
 	// Declare alarm list first
 	var alarmList *widget.List
-	
+
 	// Alarm list implementation
 	alarmList = widget.NewList(
 		func() int { return len(alarms) },
@@ -1414,23 +1426,23 @@ func (ui *MainUI) createAlarmTab() *container.TabItem {
 			bg := canvas.NewRectangle(color.RGBA{R: 20, G: 20, B: 20, A: 255})
 			bg.StrokeColor = terminalGreen
 			bg.StrokeWidth = 1
-			
+
 			nameLabel := canvas.NewText("", terminalGreen)
 			nameLabel.TextStyle = fyne.TextStyle{Bold: true, Monospace: true}
 			nameLabel.TextSize = 14
-			
+
 			timeLabel := canvas.NewText("", color.RGBA{R: 200, G: 200, B: 200, A: 255})
 			timeLabel.TextStyle = fyne.TextStyle{Monospace: true}
 			timeLabel.TextSize = 12
-			
+
 			statusLabel := canvas.NewText("", terminalGreen)
 			statusLabel.TextStyle = fyne.TextStyle{Monospace: true, Bold: true}
 			statusLabel.TextSize = 11
-			
+
 			// Smaller, better styled buttons
 			toggleBtn := NewTerminalButton("Toggle", nil)
 			deleteBtn := NewTerminalButton("Delete", nil)
-			
+
 			// Better layout with padding and spacing
 			content := container.NewBorder(
 				nil, nil, nil, nil,
@@ -1444,33 +1456,33 @@ func (ui *MainUI) createAlarmTab() *container.TabItem {
 					),
 				),
 			)
-			
+
 			return container.NewStack(bg, content)
 		},
 		func(i int, o fyne.CanvasObject) {
 			if i < len(alarms) {
 				alarm := alarms[i]
-				
+
 				// Access the enhanced container structure
 				stack := o.(*fyne.Container)
 				borderContainer := stack.Objects[1].(*fyne.Container)
 				paddedContainer := borderContainer.Objects[0].(*fyne.Container)
 				vboxContainer := paddedContainer.Objects[0].(*fyne.Container)
-				
+
 				nameLabel := vboxContainer.Objects[0].(*canvas.Text)
 				timeLabel := vboxContainer.Objects[1].(*canvas.Text)
 				statusLabel := vboxContainer.Objects[2].(*canvas.Text)
 				buttonContainer := vboxContainer.Objects[4].(*fyne.Container)
 				toggleBtn := buttonContainer.Objects[0].(*TerminalButton)
 				deleteBtn := buttonContainer.Objects[1].(*TerminalButton)
-				
+
 				// Enhanced alarm display with icons and better formatting
 				nameLabel.Text = fmt.Sprintf("🔔 %s", alarm.Name)
 				timeLabel.Text = fmt.Sprintf("⏰ %s", alarm.Time)
 				if alarm.SoundName != "" {
 					timeLabel.Text += fmt.Sprintf(" | 🔊 %s", alarm.SoundName)
 				}
-				
+
 				if alarm.Enabled {
 					statusLabel.Text = "Status: ACTIVE"
 					statusLabel.Color = terminalGreen
@@ -1484,7 +1496,7 @@ func (ui *MainUI) createAlarmTab() *container.TabItem {
 					// Normal background for disabled alarms
 					stack.Objects[0].(*canvas.Rectangle).FillColor = color.RGBA{R: 20, G: 20, B: 20, A: 255}
 				}
-				
+
 				if alarm.Recurring {
 					days := []string{"Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"}
 					recurringDays := []string{}
@@ -1497,23 +1509,23 @@ func (ui *MainUI) createAlarmTab() *container.TabItem {
 						timeLabel.Text += fmt.Sprintf(" (Recurring: %s)", strings.Join(recurringDays, ","))
 					}
 				}
-				
+
 				// Set button callbacks
 				toggleBtn.OnTap = func() {
 					alarm.Enabled = !alarm.Enabled
-					
+
 					// Manage system wake-up based on alarm state
 					if alarm.Enabled {
 						// Parse alarm time and schedule system wake-up
 						if alarmTime, err := time.Parse("15:04", alarm.Time); err == nil {
 							now := time.Now()
 							alarmDateTime := time.Date(now.Year(), now.Month(), now.Day(), alarmTime.Hour(), alarmTime.Minute(), 0, 0, now.Location())
-							
+
 							// If alarm is for today but the time has passed, schedule for tomorrow
 							if alarmDateTime.Before(now) {
 								alarmDateTime = alarmDateTime.Add(24 * time.Hour)
 							}
-							
+
 							// Schedule system wake-up for this alarm
 							if err := ui.powerManager.ScheduleWakeup(alarm.ID, alarmDateTime); err != nil {
 								log.Printf("Warning: Could not schedule system wake-up: %v", err)
@@ -1523,16 +1535,16 @@ func (ui *MainUI) createAlarmTab() *container.TabItem {
 						// Cancel wake-up when alarm is disabled
 						ui.powerManager.CancelWakeup(alarm.ID)
 					}
-					
+
 					alarmList.Refresh()
 				}
-				
+
 				deleteBtn.OnTap = func() {
 					// Cancel wake-up when alarm is deleted
 					if alarm.Enabled {
 						ui.powerManager.CancelWakeup(alarm.ID)
 					}
-					
+
 					// Remove alarm from slice
 					for j, a := range alarms {
 						if a.ID == alarm.ID {
@@ -1542,7 +1554,7 @@ func (ui *MainUI) createAlarmTab() *container.TabItem {
 					}
 					alarmList.Refresh()
 				}
-				
+
 				canvas.Refresh(nameLabel)
 				canvas.Refresh(timeLabel)
 				canvas.Refresh(statusLabel)
@@ -1565,10 +1577,10 @@ func (ui *MainUI) createAlarmTab() *container.TabItem {
 	nameEntry := widget.NewEntry()
 	nameEntry.SetPlaceHolder("Name...")
 	nameEntry.TextStyle = fyne.TextStyle{Monospace: true}
-	
+
 	// Create a properly sized name entry for grid layout
 	nameEntry.Resize(fyne.NewSize(250, 36)) // Adjusted for grid layout
-	
+
 	// Create a simple container for the entry
 	nameEntryContainer := container.NewBorder(nil, nil, nil, nil, nameEntry)
 
@@ -1588,10 +1600,10 @@ func (ui *MainUI) createAlarmTab() *container.TabItem {
 
 	// Sound selection - with proper container and sizing
 	availableSounds := ui.soundPlayer.GetAvailableSounds()
-	
+
 	// Create sound selection dropdown
 	soundSelect := widget.NewSelect(availableSounds, nil)
-	
+
 	if len(availableSounds) > 0 {
 		soundSelect.SetSelected(availableSounds[0]) // Default to first sound
 	}
@@ -1603,10 +1615,10 @@ func (ui *MainUI) createAlarmTab() *container.TabItem {
 			ui.soundPlayer.PlaySound(soundSelect.Selected, 3*time.Second)
 		}
 	})
-	
+
 	// Create a properly sized sound container with spacing
 	soundSelectContainer := container.NewBorder(nil, nil, nil, nil, soundSelect)
-	soundContainer := container.NewGridWithColumns(2, 
+	soundContainer := container.NewGridWithColumns(2,
 		soundSelectContainer,
 		testSoundBtn,
 	)
@@ -1616,51 +1628,51 @@ func (ui *MainUI) createAlarmTab() *container.TabItem {
 		if name == "" {
 			name = "Alarm"
 		}
-		
+
 		hour := parseIntSafe(hourEntry.Text)
 		minute := parseIntSafe(minuteEntry.Text)
-		
+
 		if hour < 0 || hour > 23 || minute < 0 || minute > 59 {
 			beeep.Alert("Invalid Time", "Please enter valid time (00-23:00-59)", "")
 			return
 		}
-		
+
 		// Get selected sound
 		selectedSound := soundSelect.Selected
 		if selectedSound == "" && len(availableSounds) > 0 {
 			selectedSound = availableSounds[0] // Default to first sound
 		}
-		
+
 		// Create new alarm (simplified - no recurring)
 		alarm := &Alarm{
-			ID:        fmt.Sprintf("alarm_%d", time.Now().UnixNano()),
-			Name:      name,
-			Time:      fmt.Sprintf("%02d:%02d", hour, minute),
-			Enabled:   true,
-			Recurring: false,
+			ID:         fmt.Sprintf("alarm_%d", time.Now().UnixNano()),
+			Name:       name,
+			Time:       fmt.Sprintf("%02d:%02d", hour, minute),
+			Enabled:    true,
+			Recurring:  false,
 			DaysOfWeek: make([]bool, 7),
-			SoundName: selectedSound,
+			SoundName:  selectedSound,
 		}
-		
+
 		alarms = append(alarms, alarm)
 		alarmList.Refresh()
-		
+
 		// Parse the alarm time and schedule system wake-up
 		if alarmTime, err := time.Parse("15:04", alarm.Time); err == nil {
 			now := time.Now()
 			alarmDateTime := time.Date(now.Year(), now.Month(), now.Day(), alarmTime.Hour(), alarmTime.Minute(), 0, 0, now.Location())
-			
+
 			// If alarm is for today but the time has passed, schedule for tomorrow
 			if alarmDateTime.Before(now) {
 				alarmDateTime = alarmDateTime.Add(24 * time.Hour)
 			}
-			
+
 			// Schedule system wake-up for this alarm
 			if err := ui.powerManager.ScheduleWakeup(alarm.ID, alarmDateTime); err != nil {
 				log.Printf("Warning: Could not schedule system wake-up: %v", err)
 			}
 		}
-		
+
 		// Clear form
 		nameEntry.SetText("")
 		hourEntry.SetText("08")
@@ -1674,24 +1686,24 @@ func (ui *MainUI) createAlarmTab() *container.TabItem {
 	go func() {
 		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
-		
+
 		for {
 			<-ticker.C
 			updateTimeDisplay()
-			
+
 			now := time.Now()
 			currentTime := now.Format("15:04")
 			currentWeekday := int(now.Weekday())
-			
+
 			for _, alarm := range alarms {
 				if !alarm.Enabled {
 					continue
 				}
-				
+
 				// Check if it's time for this alarm
 				if alarm.Time == currentTime {
 					shouldTrigger := false
-					
+
 					if alarm.Recurring {
 						// Check if today is enabled for this recurring alarm
 						if len(alarm.DaysOfWeek) > currentWeekday && alarm.DaysOfWeek[currentWeekday] {
@@ -1710,23 +1722,23 @@ func (ui *MainUI) createAlarmTab() *container.TabItem {
 							alarm.Enabled = false // Disable one-time alarms after triggering
 						}
 					}
-					
+
 					if shouldTrigger {
 						// Trigger alarm notification
 						beeep.Notify("Katana Alarm", fmt.Sprintf("Alarm: %s", alarm.Name), "")
-						
+
 						// Play alarm sound for 5 minutes
 						if alarm.SoundName != "" {
 							go func(soundName string) {
 								ui.soundPlayer.PlaySound(soundName, 5*time.Minute)
 							}(alarm.SoundName)
 						}
-						
+
 						// Cancel wake-up after one-time alarm triggers (since it gets disabled)
 						if !alarm.Recurring && alarm.Enabled == false {
 							ui.powerManager.CancelWakeup(alarm.ID)
 						}
-						
+
 						alarmList.Refresh()
 					}
 				}
@@ -1736,7 +1748,7 @@ func (ui *MainUI) createAlarmTab() *container.TabItem {
 
 	// Layout - clean and simple
 	formContainer := container.NewVBox(
-		container.NewGridWithColumns(2, 
+		container.NewGridWithColumns(2,
 			canvas.NewText("Alarm Name:", terminalGreen),
 			nameEntryContainer,
 		),
@@ -1854,12 +1866,12 @@ func (c *CustomMainTabContainer) createContent() {
 	for i, tab := range c.tabs {
 		labels[i] = tab.Text
 	}
-	
+
 	// Create terminal tab bar
 	c.tabBar = NewTerminalTabBar(labels, c.selected, func(idx int) {
 		c.SelectTab(idx)
 	})
-	
+
 	// Create content container
 	if len(c.tabs) > 0 {
 		c.content = container.NewMax(c.tabs[c.selected].Content)
@@ -1873,7 +1885,7 @@ func (c *CustomMainTabContainer) SelectTab(index int) {
 		c.selected = index
 		c.content.Objects = []fyne.CanvasObject{c.tabs[index].Content}
 		c.content.Refresh()
-		
+
 		// Update tab bar selection
 		for i, btn := range c.tabBar.buttons {
 			btn.Selected = (i == index)

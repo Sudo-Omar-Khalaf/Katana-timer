@@ -41,10 +41,11 @@ Thumbs.db
 
 # Data directory (optional - uncomment if you don't want to track session data)
 # data/
-# Personal project tracking files (not for public repo)
-PROJECT_STATUS.md
-GITHUB_PUSH_GUIDE.md
-BUGFIXES.md
-DEVELOPMENT.md
-image.png
+
+# Backup files
+*.backup
+*~.bak
+
+# Personal project tracking files are now in docs/development/
+# (they are tracked in git for project history)
 .github/copilot-instructions.md

@@ -1,12 +1,12 @@
 package power
 
 import (
-"fmt"
-"log"
-"os/exec"
-"runtime"
-"sync"
-"time"
+	"fmt"
+	"log"
+	"os/exec"
+	"runtime"
+	"sync"
+	"time"
 )
 
 // PowerManager handles system power management and wake-up scheduling
@@ -79,7 +79,7 @@ func (pm *PowerManager) cancelWakeupLocked(alarmID string) {
 // scheduleLinuxWakeup schedules wake-up on Linux using rtcwake
 func (pm *PowerManager) scheduleLinuxWakeup(alarmID string, wakeTime time.Time) error {
 	timestamp := wakeTime.Unix()
-	
+
 	cmd := exec.Command("sudo", "rtcwake", "-m", "no", "-t", fmt.Sprintf("%d", timestamp))
 	if err := cmd.Run(); err != nil {
 		log.Printf("rtcwake failed: %v", err)
@@ -89,7 +89,7 @@ func (pm *PowerManager) scheduleLinuxWakeup(alarmID string, wakeTime time.Time) 
 		}
 		return nil
 	}
-	
+
 	log.Printf("Linux wake-up scheduled using rtcwake for %v", wakeTime)
 	return nil
 }
@@ -102,12 +102,12 @@ func (pm *PowerManager) scheduleLinuxAtCommand(alarmID string, wakeTime time.Tim
 
 	atTime := wakeTime.Format("15:04 01/02/2006")
 	wakeCommand := fmt.Sprintf("echo 'Katana alarm %s wake-up' | wall", alarmID)
-	
+
 	cmd := exec.Command("bash", "-c", fmt.Sprintf(`echo "%s" | at %s`, wakeCommand, atTime))
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to schedule with 'at' command: %v", err)
 	}
-	
+
 	log.Printf("Linux wake-up scheduled using 'at' command for %v", wakeTime)
 	return nil
 }
@@ -124,7 +124,7 @@ func (pm *PowerManager) scheduleWindowsWakeup(alarmID string, wakeTime time.Time
 	taskName := fmt.Sprintf("KatanaAlarm_%s", alarmID)
 	timeStr := wakeTime.Format("15:04")
 	dateStr := wakeTime.Format("01/02/2006")
-	
+
 	args := []string{
 		"/create", "/tn", taskName,
 		"/tr", "echo Katana Alarm Wake-up",
@@ -135,12 +135,12 @@ func (pm *PowerManager) scheduleWindowsWakeup(alarmID string, wakeTime time.Time
 		"/rl", "HIGHEST",
 		"/f",
 	}
-	
+
 	cmd := exec.Command("schtasks", args...)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to create Windows wake timer: %v", err)
 	}
-	
+
 	log.Printf("Windows wake-up scheduled for %v", wakeTime)
 	return nil
 }
@@ -155,12 +155,12 @@ func (pm *PowerManager) cancelWindowsWakeup(alarmID string) {
 // scheduleMacOSWakeup schedules wake-up on macOS using pmset
 func (pm *PowerManager) scheduleMacOSWakeup(alarmID string, wakeTime time.Time) error {
 	timeStr := wakeTime.Format("01/02/06 15:04:05")
-	
+
 	cmd := exec.Command("sudo", "pmset", "schedule", "wake", timeStr)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to schedule macOS wake-up: %v", err)
 	}
-	
+
 	log.Printf("macOS wake-up scheduled for %v", wakeTime)
 	return nil
 }
@@ -180,7 +180,7 @@ func (pm *PowerManager) AllowSleep(alarmID string) {
 func (pm *PowerManager) GetActiveWakeTimers() []string {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
-	
+
 	timers := make([]string, 0, len(pm.activeWakeTimers))
 	for id := range pm.activeWakeTimers {
 		timers = append(timers, id)
@@ -192,7 +192,7 @@ func (pm *PowerManager) GetActiveWakeTimers() []string {
 func (pm *PowerManager) Cleanup() {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
-	
+
 	for alarmID := range pm.activeWakeTimers {
 		pm.cancelWakeupLocked(alarmID)
 	}

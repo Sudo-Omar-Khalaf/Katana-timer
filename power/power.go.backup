@@ -1,12 +1,12 @@
 package power
 
 import (
-"fmt"
-"log"
-"os/exec"
-"runtime"
-"sync"
-"time"
+	"fmt"
+	"log"
+	"os/exec"
+	"runtime"
+	"sync"
+	"time"
 )
 
 // PowerManager handles system power management and wake-up scheduling
@@ -47,7 +47,7 @@ func (pm *PowerManager) ScheduleWakeup(alarmID string, wakeTime time.Time) error
 		return pm.scheduleMacOSWakeup(alarmID, wakeTime)
 	default:
 		log.Printf("System wake-up scheduling not supported on %s, alarm will still work if system is awake", runtime.GOOS)
-		return nil
+		return nil // Don't return error, just log warning
 	}
 }
 
@@ -66,6 +66,7 @@ func (pm *PowerManager) cancelWakeupLocked(alarmID string) {
 		log.Printf("Cancelled wake timer for alarm %s", alarmID)
 	}
 
+	// Also cancel system-level wake timers
 	switch runtime.GOOS {
 	case "linux":
 		pm.cancelLinuxWakeup(alarmID)
@@ -78,14 +79,17 @@ func (pm *PowerManager) cancelWakeupLocked(alarmID string) {
 
 // scheduleLinuxWakeup schedules wake-up on Linux using rtcwake
 func (pm *PowerManager) scheduleLinuxWakeup(alarmID string, wakeTime time.Time) error {
+	// Try using rtcwake to set RTC wake alarm (requires sudo/root)
 	timestamp := wakeTime.Unix()
 	
 	cmd := exec.Command("sudo", "rtcwake", "-m", "no", "-t", fmt.Sprintf("%d", timestamp))
 	if err := cmd.Run(); err != nil {
-		log.Printf("rtcwake failed: %v", err)
+		log.Printf("rtcwake failed (may need sudo): %v. Trying alternative methods...", err)
+		
+		// Fallback: Try using systemd timer as user service
 		if err := pm.scheduleLinuxAtCommand(alarmID, wakeTime); err != nil {
-			log.Printf("Warning: Could not schedule system wake-up. Alarm will only ring if system is awake.")
-			return nil
+			log.Printf("Warning: Could not schedule system wake-up for Linux. Alarm will only ring if system is awake.")
+			return nil // Don't fail the alarm creation
 		}
 		return nil
 	}
@@ -96,11 +100,15 @@ func (pm *PowerManager) scheduleLinuxWakeup(alarmID string, wakeTime time.Time) 
 
 // scheduleLinuxAtCommand uses the 'at' command as fallback
 func (pm *PowerManager) scheduleLinuxAtCommand(alarmID string, wakeTime time.Time) error {
+	// Check if 'at' command is available
 	if _, err := exec.LookPath("at"); err != nil {
 		return fmt.Errorf("'at' command not available")
 	}
 
+	// Format time for 'at' command
 	atTime := wakeTime.Format("15:04 01/02/2006")
+	
+	// Schedule a command that will try to wake the system
 	wakeCommand := fmt.Sprintf("echo 'Katana alarm %s wake-up' | wall", alarmID)
 	
 	cmd := exec.Command("bash", "-c", fmt.Sprintf(`echo "%s" | at %s`, wakeCommand, atTime))
@@ -114,9 +122,12 @@ func (pm *PowerManager) scheduleLinuxAtCommand(alarmID string, wakeTime time.Tim
 
 // cancelLinuxWakeup cancels Linux wake-up timers
 func (pm *PowerManager) cancelLinuxWakeup(alarmID string) {
+	// Cancel rtcwake
 	exec.Command("sudo", "rtcwake", "-m", "disable").Run()
+	
+	// Cancel at jobs related to this alarm
 	cmd := exec.Command("bash", "-c", fmt.Sprintf("atq | grep 'Katana alarm %s' | cut -f1 | xargs -r atrm", alarmID))
-	cmd.Run()
+	cmd.Run() // Ignore errors
 }
 
 // scheduleWindowsWakeup schedules wake-up on Windows using Task Scheduler
@@ -125,6 +136,7 @@ func (pm *PowerManager) scheduleWindowsWakeup(alarmID string, wakeTime time.Time
 	timeStr := wakeTime.Format("15:04")
 	dateStr := wakeTime.Format("01/02/2006")
 	
+	// Create a scheduled task that can wake the computer
 	args := []string{
 		"/create", "/tn", taskName,
 		"/tr", "echo Katana Alarm Wake-up",
@@ -133,7 +145,7 @@ func (pm *PowerManager) scheduleWindowsWakeup(alarmID string, wakeTime time.Time
 		"/sd", dateStr,
 		"/ru", "SYSTEM",
 		"/rl", "HIGHEST",
-		"/f",
+		"/f", // Force overwrite if exists
 	}
 	
 	cmd := exec.Command("schtasks", args...)
@@ -149,11 +161,12 @@ func (pm *PowerManager) scheduleWindowsWakeup(alarmID string, wakeTime time.Time
 func (pm *PowerManager) cancelWindowsWakeup(alarmID string) {
 	taskName := fmt.Sprintf("KatanaAlarm_%s", alarmID)
 	cmd := exec.Command("schtasks", "/delete", "/tn", taskName, "/f")
-	cmd.Run()
+	cmd.Run() // Ignore errors
 }
 
 // scheduleMacOSWakeup schedules wake-up on macOS using pmset
 func (pm *PowerManager) scheduleMacOSWakeup(alarmID string, wakeTime time.Time) error {
+	// Use pmset to schedule wake-up (requires admin privileges)
 	timeStr := wakeTime.Format("01/02/06 15:04:05")
 	
 	cmd := exec.Command("sudo", "pmset", "schedule", "wake", timeStr)
@@ -167,12 +180,106 @@ func (pm *PowerManager) scheduleMacOSWakeup(alarmID string, wakeTime time.Time) 
 
 // cancelMacOSWakeup cancels macOS wake-up timers
 func (pm *PowerManager) cancelMacOSWakeup(alarmID string) {
+	// Cancel scheduled wake events
 	cmd := exec.Command("sudo", "pmset", "schedule", "cancel")
-	cmd.Run()
+	cmd.Run() // Ignore errors
 }
 
-// AllowSleep allows the system to sleep (cancels wake-up scheduling)
+// PreventSleep prevents system from sleeping until the alarm time (no root required)
+// This is more reliable than wake-up scheduling for desktop Linux systems
+func (pm *PowerManager) PreventSleep(alarmID string, wakeTime time.Time) error {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	// Cancel any existing inhibitor for this alarm
+	pm.allowSleepLocked(alarmID)
+
+	duration := time.Until(wakeTime)
+	if duration <= 0 {
+		return fmt.Errorf("wake time is in the past")
+	}
+
+	log.Printf("Preventing system sleep for alarm %s until %v (duration: %v)", alarmID, wakeTime, duration)
+
+	switch runtime.GOOS {
+	case "linux":
+		return pm.preventSleepLinux(alarmID, duration)
+	default:
+		// Fall back to wake-up scheduling for non-Linux systems
+		return pm.scheduleLinuxWakeup(alarmID, wakeTime)
+	}
+}
+
+// preventSleepLinux prevents sleep on Linux using systemd-inhibit (no root needed)
+func (pm *PowerManager) preventSleepLinux(alarmID string, duration time.Duration) error {
+	// Try systemd-inhibit first (available on most modern Linux distros)
+	if _, err := exec.LookPath("systemd-inhibit"); err == nil {
+		seconds := int(duration.Seconds())
+		cmd := exec.Command("systemd-inhibit",
+			"--what=sleep:idle",
+			"--who=Katana-Alarm",
+			fmt.Sprintf("--why=Alarm %s scheduled", alarmID),
+			"sleep", fmt.Sprintf("%d", seconds))
+		
+		if err := cmd.Start(); err != nil {
+			log.Printf("systemd-inhibit failed: %v, trying alternatives...", err)
+			return pm.preventSleepGnome(alarmID, duration)
+		}
+		
+		pm.sleepInhibitors[alarmID] = cmd
+		log.Printf("Sleep prevention active using systemd-inhibit for %v", duration)
+		
+		// Auto-cleanup when inhibitor process ends
+		go func() {
+			cmd.Wait()
+			pm.mu.Lock()
+			delete(pm.sleepInhibitors, alarmID)
+			pm.mu.Unlock()
+			log.Printf("Sleep inhibitor for alarm %s ended", alarmID)
+		}()
+		
+		return nil
+	}
+	
+	return pm.preventSleepGnome(alarmID, duration)
+}
+
+// preventSleepGnome prevents sleep using gnome-session-inhibit (GNOME desktops)
+func (pm *PowerManager) preventSleepGnome(alarmID string, duration time.Duration) error {
+	if _, err := exec.LookPath("gnome-session-inhibit"); err == nil {
+		seconds := int(duration.Seconds())
+		cmd := exec.Command("gnome-session-inhibit",
+			"--inhibit", "suspend:idle",
+			"--reason", fmt.Sprintf("Katana Alarm %s scheduled", alarmID),
+			"sleep", fmt.Sprintf("%d", seconds))
+		
+		if err := cmd.Start(); err != nil {
+			log.Printf("gnome-session-inhibit failed: %v", err)
+			return err
+		}
+		
+		pm.sleepInhibitors[alarmID] = cmd
+		log.Printf("Sleep prevention active using gnome-session-inhibit for %v", duration)
+		
+		// Auto-cleanup when inhibitor process ends
+		go func() {
+			cmd.Wait()
+			pm.mu.Lock()
+			delete(pm.sleepInhibitors, alarmID)
+			pm.mu.Unlock()
+			log.Printf("Sleep inhibitor for alarm %s ended", alarmID)
+		}()
+		
+		return nil
+	}
+	
+	log.Printf("Warning: No sleep prevention method available. Alarm may not ring if system sleeps.")
+	return fmt.Errorf("no sleep prevention tools available")
+}
+
+// AllowSleep is kept for backward compatibility - it simply cancels wake timers
 func (pm *PowerManager) AllowSleep(alarmID string) {
+	// Just cancel any existing wake timers for this alarm
 	pm.CancelWakeup(alarmID)
 }
 
@@ -193,6 +300,7 @@ func (pm *PowerManager) Cleanup() {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 	
+	// Cancel all active wake timers
 	for alarmID := range pm.activeWakeTimers {
 		pm.cancelWakeupLocked(alarmID)
 	}

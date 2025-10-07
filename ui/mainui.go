@@ -1502,9 +1502,9 @@ func (ui *MainUI) createAlarmTab() *container.TabItem {
 				toggleBtn.OnTap = func() {
 					alarm.Enabled = !alarm.Enabled
 					
-					// Manage sleep prevention based on alarm state
+					// Manage system wake-up based on alarm state
 					if alarm.Enabled {
-						// Parse alarm time and schedule wake-up
+						// Parse alarm time and schedule system wake-up
 						if alarmTime, err := time.Parse("15:04", alarm.Time); err == nil {
 							now := time.Now()
 							alarmDateTime := time.Date(now.Year(), now.Month(), now.Day(), alarmTime.Hour(), alarmTime.Minute(), 0, 0, now.Location())
@@ -1515,7 +1515,9 @@ func (ui *MainUI) createAlarmTab() *container.TabItem {
 							}
 							
 							// Schedule system wake-up for this alarm
-							ui.powerManager.ScheduleWakeup(alarm.ID, alarmDateTime)
+							if err := ui.powerManager.ScheduleWakeup(alarm.ID, alarmDateTime); err != nil {
+								log.Printf("Warning: Could not schedule system wake-up: %v", err)
+							}
 						}
 					} else {
 						// Cancel wake-up when alarm is disabled
@@ -1654,7 +1656,9 @@ func (ui *MainUI) createAlarmTab() *container.TabItem {
 			}
 			
 			// Schedule system wake-up for this alarm
-			ui.powerManager.ScheduleWakeup(alarm.ID, alarmDateTime)
+			if err := ui.powerManager.ScheduleWakeup(alarm.ID, alarmDateTime); err != nil {
+				log.Printf("Warning: Could not schedule system wake-up: %v", err)
+			}
 		}
 		
 		// Clear form
@@ -1718,9 +1722,9 @@ func (ui *MainUI) createAlarmTab() *container.TabItem {
 							}(alarm.SoundName)
 						}
 						
-						// Allow sleep after one-time alarm triggers (since it gets disabled)
+						// Cancel wake-up after one-time alarm triggers (since it gets disabled)
 						if !alarm.Recurring && alarm.Enabled == false {
-							ui.powerManager.AllowSleep()
+							ui.powerManager.CancelWakeup(alarm.ID)
 						}
 						
 						alarmList.Refresh()
